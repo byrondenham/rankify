@@ -1,11 +1,14 @@
 import os
 from os.path import join, dirname
 from dotenv import load_dotenv
+from flask import Flask, render_template, request, redirect, url_for
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import itertools
 import random
 import json
+
+app = Flask(__name__)
 
 dotenv_path = join(dirname(__file__), '.env')
 load_dotenv(dotenv_path)
@@ -18,6 +21,21 @@ SPOTIPY_REDIRECT_URI = os.environ.get("SPOTIPY_REDIRECT_URI")
 # Authenticate with Spotify API
 sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET, redirect_uri=SPOTIPY_REDIRECT_URI, scope='user-library-read'))
 
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/playlist', methods=['POST'])
+def playlist():
+    playlist_id = request.form.get('playlist_id')
+    progress_file = 'progress.json'
+
+    if playlist_id:
+        final_ranking = pairwise_comparison(playlist_id, progress_file)
+        return render_template('result.html', final_ranking=final_ranking)
+    else:
+        return redirect(url_for('index'))
+
 def get_user_playlist_id():
     playlist_id = input("Enter your Spotify playlist ID: ")
     return playlist_id
@@ -27,10 +45,15 @@ def get_playlist_tracks(playlist_id):
     return [track['track']['name'] for track in results['items']]
 
 def get_user_preference(pair):
-    # Simulate user preference (replace with actual user input)
     print(f"Which song do you prefer? {pair[0]} or {pair[1]}?")
-    choice = input().strip().lower()
-    return pair[0] if choice == pair[0].lower() else pair[1]
+    partial_name = input().strip().lower()
+    if partial_name in pair[0].lower():
+        return pair[0]
+    elif partial_name in pair[1].lower():
+        return pair[1]
+    else:
+        print("Invalid input. Please enter a valid part of the song name.")
+        return get_user_preference(pair)
 
 def load_progress(file_path):
     try:
@@ -77,11 +100,5 @@ def pairwise_comparison(playlist_id, progress_file):
     sorted_rankings = sorted(rankings.items(), key=lambda x: x[1], reverse=True)
     return sorted_rankings
 
-# Example usage
-playlist_id = get_user_playlist_id()
-progress_file = 'progress.json' # Specify the file path where progress will be saved
-final_ranking = pairwise_comparison(playlist_id, progress_file)
-
-print("Final Ranking:")
-for song, score in final_ranking:
-    print(f"{song}: {score} preferences")
+if __name__ == '__main__':
+    app.run(debug=True)
